@@ -1,4 +1,5 @@
 use anyhow::Result;
+use openmetrics_parser::{PrometheusType, PrometheusValue};
 use reqwest::blocking::Client;
 use clap::Parser;
 use std::io;
@@ -12,7 +13,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, Borders, List, ListItem},
     Frame, Terminal,
 };
 
@@ -25,11 +26,12 @@ struct Args {
 }
 
 struct App {
-    metrics: Vec<String>,
+    endpoint: String,
+    latest_metrics: Result<openmetrics_parser::MetricsExposition<PrometheusType, PrometheusValue>, openmetrics_parser::ParseError>,
     scroll: u16,
 }
 
-fn fetch_prometheus_metrics(url: &str) -> Result<String> {
+fn fetch_prometheus_text(url: &str) -> Result<String> {
     let url = if !url.starts_with("http") {
         format!("http://{url}")
     } else {
@@ -67,36 +69,47 @@ fn ui(f: &mut Frame, app: &App) {
         .constraints([Constraint::Length(1), Constraint::Min(0)].as_ref())
         .split(f.area());
 
-    let metrics: Vec<ListItem> = app
-        .metrics
-        .iter()
-        .map(|m| {
-            ListItem::new(Line::from(vec![Span::styled(
-                m.clone(),
-                Style::default().add_modifier(Modifier::BOLD),
-            )]))
-        })
-        .collect();
+    match &app.latest_metrics {
+        Ok(latest_metrics) => {
+            let metrics: Vec<ListItem> = latest_metrics.families
+                .iter()
+                .map(|m| {
+                    ListItem::new(Line::from(vec![Span::styled(
+                        format!("Family: {}", m.0),
+                        Style::default().add_modifier(Modifier::BOLD),
+                    )]))
+                })
+                .collect();
 
-    let metrics_list = List::new(metrics)
-        .block(Block::default().borders(Borders::ALL).title("Metrics"))
-        .highlight_style(Style::default().bg(Color::LightGreen).fg(Color::Black))
-        .highlight_symbol(">> ");
+            let metrics_list = List::new(metrics)
+                .block(Block::default().borders(Borders::ALL).title("Metrics"))
+                .highlight_style(Style::default().bg(Color::LightGreen).fg(Color::Black))
+                .highlight_symbol(">> ");
 
-    f.render_stateful_widget(metrics_list, chunks[1], &mut ratatui::widgets::ListState::default().with_selected(Some(app.scroll as usize)));
+            f.render_stateful_widget(metrics_list, chunks[1], &mut ratatui::widgets::ListState::default().with_selected(Some(app.scroll as usize)));
+        },
+        Err(e) => {
+            let widget = Span::styled(format!("Metrics from {} could not be parsed: {}", app.endpoint, e), Style::default().add_modifier(Modifier::SLOW_BLINK));
+            f.render_widget(widget, chunks[1]);
+        }
+    }
+
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
-    let metrics = fetch_prometheus_metrics(&args.endpoint)?;
+    let metric_text = fetch_prometheus_text(&args.endpoint)?;
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
+    let latest_metrics = openmetrics_parser::prometheus::parse_prometheus(&metric_text);
+    
     let app = App {
-        metrics: metrics.lines().map(String::from).collect(),
+        endpoint: args.endpoint,
+        latest_metrics,
         scroll: 0,
     };
 
