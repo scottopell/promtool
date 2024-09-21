@@ -8,13 +8,13 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{prelude::Stylize, text::Text, widgets::{Cell, Row, Table}};
+use ratatui::{prelude::Stylize, text::Text, widgets::{Row, Table}};
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    text::{Span},
+    widgets::{Block, Borders},
     Frame, Terminal,
 };
 
