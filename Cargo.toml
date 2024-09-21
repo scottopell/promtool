@@ -3,10 +3,13 @@ name = "prometheus_metrics_viewer"
 version = "0.1.0"
 edition = "2021"
 
+[net]
+git-fetch-with-cli = true   # use the `git` executable for git operations
+
 [dependencies]
 anyhow = "1.0.89"
 clap = { version = "4.5.18", features = ["derive"] }
 crossterm = "0.28.1"
-openmetrics-parser = "0.4.4"
+openmetrics-parser = { git="ssh://git@github.com/scottopell/openmetrics-parser.git"}
 ratatui = "0.28.1"
 reqwest = { version = "0.12.7", features = ["blocking"] }

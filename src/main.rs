@@ -8,12 +8,13 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use ratatui::{prelude::Stylize, text::Text, widgets::{Cell, Row, Table}};
 use ratatui::{
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem},
+    widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame, Terminal,
 };
 
@@ -71,22 +72,41 @@ fn ui(f: &mut Frame, app: &App) {
 
     match &app.latest_metrics {
         Ok(latest_metrics) => {
-            let metrics: Vec<ListItem> = latest_metrics.families
+            let metrics: Vec<Row> = latest_metrics.families
                 .iter()
                 .map(|m| {
-                    ListItem::new(Line::from(vec![Span::styled(
-                        format!("Family: {}", m.0),
-                        Style::default().add_modifier(Modifier::BOLD),
-                    )]))
+                    let (name, fam) = m;
+
+                    // For each metricfamily, I want to check if all samples are from a single labelset
+                    // ie, is there a single logical metric series within this metricfamily?
+                    // or are there multiple?
+                    // If there is a single, that means I can display a labelset and sample value on the same line
+                    // if there are multiple, I'd want to open either a side pane or a tree, not sure.
+                    // So for now, if there are multiple, I guess lets just display '(multiple labelsets)'
+
+
+                    let m_str = fam.metrics_as_string().unwrap_or(String::from("Couldn't render metrics"));
+
+                    Row::new(vec![
+                        Text::from(name.clone()).bold().alignment(Alignment::Left),
+                        Text::from(format!("{}", fam.family_type)).alignment(Alignment::Center),
+                        Text::from(m_str).alignment(Alignment::Right),
+                    ])
                 })
                 .collect();
 
-            let metrics_list = List::new(metrics)
+            let widths = [
+                Constraint::Percentage(60),
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
+            ];
+
+            let metrics_list = Table::new(metrics, widths)
                 .block(Block::default().borders(Borders::ALL).title("Metrics"))
                 .highlight_style(Style::default().bg(Color::LightGreen).fg(Color::Black))
                 .highlight_symbol(">> ");
 
-            f.render_stateful_widget(metrics_list, chunks[1], &mut ratatui::widgets::ListState::default().with_selected(Some(app.scroll as usize)));
+            f.render_stateful_widget(metrics_list, chunks[1], &mut ratatui::widgets::TableState::default().with_selected(Some(app.scroll as usize)));
         },
         Err(e) => {
             let widget = Span::styled(format!("Metrics from {} could not be parsed: {}", app.endpoint, e), Style::default().add_modifier(Modifier::SLOW_BLINK));
